@@ -158,17 +158,26 @@ def warp_face(image: Any, homography_matrix: Any) -> Any:
     if isinstance(image, bytes):
         image = _bytes_to_image(image)
 
-    if homography_matrix.shape != (3, 3):
-        raise ValueError(f"Expected homography matrix shape (3, 3), got {homography_matrix.shape}")
-
-    aligned_face = cv2.warpPerspective(
-        image,
-        homography_matrix,
-        (112, 112),
-        flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0
-    )
+    if homography_matrix.shape == (2, 3):
+        aligned_face = cv2.warpAffine(
+            image,
+            homography_matrix,
+            (112, 112),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0
+        )
+    elif homography_matrix.shape == (3, 3):
+        aligned_face = cv2.warpPerspective(
+            image,
+            homography_matrix,
+            (112, 112),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0
+        )
+    else:
+        raise ValueError(f"Expected transformation matrix shape (2, 3) or (3, 3), got {homography_matrix.shape}")
 
     return aligned_face
 
@@ -217,14 +226,22 @@ def calculate_face_similarity(image_a: Any, image_b: Any) -> float:
     keypoints_a = detect_face_keypoints(img_a)
     keypoints_b = detect_face_keypoints(img_b)
 
-    homography_a, _ = cv2.findHomography(keypoints_a, ARCFACE_DST, cv2.RANSAC)
-    homography_b, _ = cv2.findHomography(keypoints_b, ARCFACE_DST, cv2.RANSAC)
+    transformation_matrix_a, _ = cv2.estimateAffinePartial2D(
+        keypoints_a,
+        ARCFACE_DST,
+        method=cv2.LMEDS
+    )
+    transformation_matrix_b, _ = cv2.estimateAffinePartial2D(
+        keypoints_b,
+        ARCFACE_DST,
+        method=cv2.LMEDS
+    )
 
-    if homography_a is None or homography_b is None:
-        raise ValueError("Failed to compute homography matrix for face alignment")
+    if transformation_matrix_a is None or transformation_matrix_b is None:
+        raise ValueError("Failed to compute transformation matrix for face alignment")
 
-    aligned_a = warp_face(img_a, homography_a)
-    aligned_b = warp_face(img_b, homography_b)
+    aligned_a = warp_face(img_a, transformation_matrix_a)
+    aligned_b = warp_face(img_b, transformation_matrix_b)
 
     spoof_score_a = antispoof_check(aligned_a)
     spoof_score_b = antispoof_check(aligned_b)
