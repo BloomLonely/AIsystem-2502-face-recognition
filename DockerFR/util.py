@@ -99,25 +99,20 @@ def compute_face_embedding(face_image: Any) -> Any:
     The embedding should capture discriminative facial features for comparison.
     This function expects an aligned face image (112x112) as input.
     """
-    # Validate that the input is an aligned face image (112x112)
     if not isinstance(face_image, np.ndarray):
         raise ValueError("face_image must be a numpy array")
 
     if face_image.shape[:2] != (112, 112):
         raise ValueError(f"This function expects an aligned face image (112x112), got shape {face_image.shape[:2]}")
 
-    # Ensure the image is in BGR format
     if len(face_image.shape) == 2:
         face_image = cv2.cvtColor(face_image, cv2.COLOR_GRAY2BGR)
 
-    # Get the recognition model from the face app
     app = _get_face_app()
     rec_model = app.models['recognition']
 
-    # Get embedding directly from aligned face
     embedding = rec_model.get_feat(face_image)
 
-    # Flatten to 1D array if needed
     if len(embedding.shape) > 1:
         embedding = embedding.flatten()
 
@@ -166,7 +161,6 @@ def warp_face(image: Any, homography_matrix: Any) -> Any:
     if homography_matrix.shape != (3, 3):
         raise ValueError(f"Expected homography matrix shape (3, 3), got {homography_matrix.shape}")
 
-    # Apply the homography transformation to warp the face to 112x112
     aligned_face = cv2.warpPerspective(
         image,
         homography_matrix,
@@ -223,7 +217,6 @@ def calculate_face_similarity(image_a: Any, image_b: Any) -> float:
     keypoints_a = detect_face_keypoints(img_a)
     keypoints_b = detect_face_keypoints(img_b)
 
-    # Compute homography matrix from keypoints to ARCFACE_DST
     homography_a, _ = cv2.findHomography(keypoints_a, ARCFACE_DST, cv2.RANSAC)
     homography_b, _ = cv2.findHomography(keypoints_b, ARCFACE_DST, cv2.RANSAC)
 
