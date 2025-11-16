@@ -97,14 +97,29 @@ def compute_face_embedding(face_image: Any) -> Any:
     Compute a numerical embedding vector for the provided face image.
 
     The embedding should capture discriminative facial features for comparison.
+    This function expects an aligned face image (112x112) as input.
     """
+    # Validate that the input is an aligned face image (112x112)
+    if not isinstance(face_image, np.ndarray):
+        raise ValueError("face_image must be a numpy array")
+
+    if face_image.shape[:2] != (112, 112):
+        raise ValueError(f"This function expects an aligned face image (112x112), got shape {face_image.shape[:2]}")
+
+    # Ensure the image is in BGR format
+    if len(face_image.shape) == 2:
+        face_image = cv2.cvtColor(face_image, cv2.COLOR_GRAY2BGR)
+
+    # Get the recognition model from the face app
     app = _get_face_app()
-    faces = app.get(face_image)
+    rec_model = app.models['recognition']
 
-    if len(faces) == 0:
-        raise ValueError("No face detected in the image for embedding extraction")
+    # Get embedding directly from aligned face
+    embedding = rec_model.get_feat(face_image)
 
-    embedding = faces[0].embedding
+    # Flatten to 1D array if needed
+    if len(embedding.shape) > 1:
+        embedding = embedding.flatten()
 
     return embedding
 
@@ -148,21 +163,13 @@ def warp_face(image: Any, homography_matrix: Any) -> Any:
     if isinstance(image, bytes):
         image = _bytes_to_image(image)
 
-    if homography_matrix.shape != (5, 2):
-        raise ValueError(f"Expected keypoints shape (5, 2), got {homography_matrix.shape}")
+    if homography_matrix.shape != (3, 3):
+        raise ValueError(f"Expected homography matrix shape (3, 3), got {homography_matrix.shape}")
 
-    transformation_matrix, _ = cv2.estimateAffinePartial2D(
-        homography_matrix,
-        ARCFACE_DST,
-        method=cv2.LMEDS
-    )
-
-    if transformation_matrix is None:
-        raise ValueError("Failed to estimate transformation matrix for face alignment")
-
-    aligned_face = cv2.warpAffine(
+    # Apply the homography transformation to warp the face to 112x112
+    aligned_face = cv2.warpPerspective(
         image,
-        transformation_matrix,
+        homography_matrix,
         (112, 112),
         flags=cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_CONSTANT,
@@ -216,8 +223,15 @@ def calculate_face_similarity(image_a: Any, image_b: Any) -> float:
     keypoints_a = detect_face_keypoints(img_a)
     keypoints_b = detect_face_keypoints(img_b)
 
-    aligned_a = warp_face(img_a, keypoints_a)
-    aligned_b = warp_face(img_b, keypoints_b)
+    # Compute homography matrix from keypoints to ARCFACE_DST
+    homography_a, _ = cv2.findHomography(keypoints_a, ARCFACE_DST, cv2.RANSAC)
+    homography_b, _ = cv2.findHomography(keypoints_b, ARCFACE_DST, cv2.RANSAC)
+
+    if homography_a is None or homography_b is None:
+        raise ValueError("Failed to compute homography matrix for face alignment")
+
+    aligned_a = warp_face(img_a, homography_a)
+    aligned_b = warp_face(img_b, homography_b)
 
     spoof_score_a = antispoof_check(aligned_a)
     spoof_score_b = antispoof_check(aligned_b)
@@ -225,8 +239,8 @@ def calculate_face_similarity(image_a: Any, image_b: Any) -> float:
     if spoof_score_a < 0.3 or spoof_score_b < 0.3:
         print(f"Warning: Low anti-spoof confidence (Image A: {spoof_score_a:.2f}, Image B: {spoof_score_b:.2f})")
 
-    embedding_a = compute_face_embedding(img_a)
-    embedding_b = compute_face_embedding(img_b)
+    embedding_a = compute_face_embedding(aligned_a)
+    embedding_b = compute_face_embedding(aligned_b)
 
     dot_product = np.dot(embedding_a, embedding_b)
     norm_a = np.linalg.norm(embedding_a)
