@@ -3,6 +3,15 @@ FROM nvcr.io/nvidia/tritonserver:23.10-py3
 # Workdir inside container
 WORKDIR /app
 
+# Install system dependencies for OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy code and model repository
 COPY . /app
 

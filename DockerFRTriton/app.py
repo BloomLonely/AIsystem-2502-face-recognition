@@ -40,9 +40,18 @@ def startup_event() -> None:
         return
 
     try:
-        prepare_model_repository(MODEL_REPO)
-        _server_handle = start_triton_server(MODEL_REPO)
-        _triton_client = create_triton_client(f"http://localhost:{TRITON_HTTP_PORT}")
+        # Triton is already started by start.sh, just create the client
+        import time
+        # Wait for Triton to be ready
+        for _ in range(30):
+            try:
+                _triton_client = create_triton_client(f"localhost:{TRITON_HTTP_PORT}")
+                logger.info("Successfully connected to Triton server")
+                break
+            except Exception:
+                time.sleep(1)
+        else:
+            raise RuntimeError("Triton server not ready after 30 seconds")
     except FileNotFoundError as exc:
         logger.error("Model repository missing required ONNX/model files: %s", exc)
     except Exception as exc:  # pragma: no cover - defensive
@@ -51,10 +60,10 @@ def startup_event() -> None:
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
-    """Stop the Triton server when the FastAPI app shuts down."""
-    global _server_handle
-    stop_triton_server(_server_handle)
-    _server_handle = None
+    """Close the Triton client when FastAPI shuts down (server is managed by start.sh)."""
+    global _triton_client
+    # Server is managed by start.sh, just close the client if needed
+    _triton_client = None
 
 
 @app.get("/health", tags=["Health"])

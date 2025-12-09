@@ -28,6 +28,20 @@ if [ "${START_TRITON}" = true ]; then
     kill "${TRITON_PID}" 2>/dev/null || true
   }
   trap cleanup EXIT
+
+  # Wait for Triton to be ready
+  echo "[start] Waiting for Triton server to be ready..."
+  for i in {1..60}; do
+    if curl -s "http://localhost:${TRITON_HTTP_PORT}/v2/health/ready" > /dev/null 2>&1; then
+      echo "[start] Triton server is ready!"
+      break
+    fi
+    if [ $i -eq 60 ]; then
+      echo "[start] ERROR: Triton server failed to start within 60 seconds"
+      exit 1
+    fi
+    sleep 1
+  done
 fi
 
 echo "[start] Launching FastAPI on port ${FASTAPI_PORT}"

@@ -72,15 +72,25 @@ def convert_model_to_onnx(weights_path: Path, onnx_path: Path, opset: int) -> No
     torch.onnx.export(
         model,
         dummy_input,
-        onnx_path,
+        str(onnx_path),
         input_names=["input"],
         output_names=["embedding"],
         dynamic_axes=dynamic_axes,
         opset_version=opset,
         do_constant_folding=True,
+        export_params=True,
+        verbose=False,
     )
-    onnx.checker.check_model(onnx.load(str(onnx_path)))
+
+    # Verify and print ONNX model info
+    onnx_model = onnx.load(str(onnx_path))
+    onnx.checker.check_model(onnx_model)
+
     print(f"[convert] ONNX export complete: {onnx_path}")
+    print(f"[convert] Input names: {[inp.name for inp in onnx_model.graph.input]}")
+    print(f"[convert] Output names: {[out.name for out in onnx_model.graph.output]}")
+    print(f"[convert] Input shapes: {[(inp.name, [d.dim_value if d.dim_value > 0 else d.dim_param for d in inp.type.tensor_type.shape.dim]) for inp in onnx_model.graph.input]}")
+    print(f"[convert] Output shapes: {[(out.name, [d.dim_value if d.dim_value > 0 else d.dim_param for d in out.type.tensor_type.shape.dim]) for out in onnx_model.graph.output]}")
 
 
 def parse_args() -> argparse.Namespace:
